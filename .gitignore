@@ -6,13 +6,13 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# 가상 환경
 .venv
 
-# Scratchpads (working code, not committed)
+# Scratchpad(작업용 코드, 커밋하지 않음)
 **/scratchpad/
 
-# Training artifacts
+# 학습 산출물
 *.pt
 *.bin
 *.safetensors
@@ -20,5 +20,5 @@ loss_log.json
 *.png
 *.wav
 
-# Data (scratchpad data is ignored, top-level data/ is committed)
+# 데이터(scratchpad 데이터는 무시하고, 최상위 data/는 커밋함)
 scratchpad/data/

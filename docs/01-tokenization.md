@@ -1,17 +1,17 @@
-# Part 1: Tokenization
+# 파트 1: 토큰화
 
-LLMs don't see text — they see sequences of integers. A tokenizer converts between the two.
+LLM은 텍스트를 직접 보지 않습니다. 정수의 나열을 봅니다. 토크나이저는 텍스트와 정수 시퀀스를 서로 변환합니다.
 
-No file to create here — the tokenizer is built directly into `train.py` (Part 3). This part explains how it works so you understand what you're writing later.
+여기서 새로 만들 파일은 없습니다. 토크나이저는 파트 3의 `train.py` 안에 직접 들어갑니다. 이 파트는 나중에 작성할 코드가 어떻게 동작하는지 이해하도록 설명하는 구간입니다.
 
-## Character-Level Tokenization
+## 문자 단위 토큰화
 
-We use the simplest possible tokenizer: each unique character gets an ID.
+가장 단순한 토크나이저를 사용합니다. 고유한 문자마다 하나의 ID를 부여합니다.
 
 ```python
 text = open("../data/shakespeare.txt").read()
 chars = sorted(set(text))
-vocab_size = len(chars)  # 65 for Shakespeare
+vocab_size = len(chars)  # Shakespeare에서는 65
 
 stoi = {c: i for i, c in enumerate(chars)}  # string to int
 itos = {i: c for c, i in stoi.items()}      # int to string
@@ -28,29 +28,29 @@ encode("Hello")  # [20, 43, 50, 50, 53]
 decode([20, 43, 50, 50, 53])  # "Hello"
 ```
 
-That's it. No libraries, no pretrained models. Shakespeare uses 65 unique characters (letters, digits, punctuation, newlines). Each character becomes one token.
+이게 전부입니다. 라이브러리도, 사전학습 모델도 없습니다. Shakespeare 데이터에는 고유 문자가 65개 있습니다(문자, 숫자, 문장부호, 줄바꿈). 각 문자가 하나의 토큰이 됩니다.
 
-This tokenizer is built directly into our data loading — there's no separate tokenizer file to write.
+이 토크나이저는 데이터 로딩 코드 안에 직접 포함됩니다. 따로 작성할 토크나이저 파일은 없습니다.
 
-## Why Character-Level?
+## 왜 문자 단위인가?
 
-Character-level tokenization works well for small datasets like Shakespeare (~1M characters) because:
+문자 단위 토큰화는 Shakespeare처럼 작은 데이터셋(약 100만 문자)에 잘 맞습니다. 이유는 다음과 같습니다.
 
-- **Tiny vocabulary** (65 tokens) — the model's embedding table and output layer are small
-- **Dense statistics** — with only 65² = 4,225 possible bigrams, every bigram appears many times in the data
-- **No dependencies** — no external libraries needed
+- **아주 작은 어휘**(65개 토큰) — 모델의 임베딩 테이블과 출력층이 작습니다
+- **촘촘한 통계** — 가능한 bigram이 65² = 4,225개뿐이라 모든 bigram이 데이터 안에 여러 번 등장합니다
+- **의존성 없음** — 외부 라이브러리가 필요하지 않습니다
 
-This matters more than you'd expect. GPT-2's tokenizer (BPE, 50,257 tokens) turns Shakespeare into ~338k tokens with ~11,700 unique token types. Most token bigrams appear only once or twice — the data is too sparse for the model to learn sequential patterns. We tested this: with BPE on Shakespeare, training loss gets stuck at ~6.3 (unigram frequency) and never improves. With character-level, it drops to ~1.5.
+이 점은 생각보다 중요합니다. GPT-2의 토크나이저(BPE, 50,257개 토큰)는 Shakespeare를 약 33만 8천 개 토큰과 약 1만 1700개 고유 토큰 유형으로 바꿉니다. 대부분의 토큰 bigram은 한두 번만 등장합니다. 데이터가 너무 희소해서 모델이 순차 패턴을 배우기 어렵습니다. 실제로 테스트해 보면 Shakespeare에 BPE를 쓰면 학습 손실이 약 6.3(단일 토큰 빈도 수준)에서 멈추고 나아지지 않습니다. 문자 단위를 쓰면 약 1.5까지 떨어집니다.
 
-## The Tradeoff
+## 트레이드오프
 
-Character-level doesn't scale to large datasets:
+문자 단위 방식은 큰 데이터셋으로 확장하기 어렵습니다.
 
-- **Sequences are ~3x longer** than BPE (more compute per sample)
-- **The model has to learn spelling from scratch** — it has no concept of "words"
-- **It wastes capacity on predictable patterns** — `t-h-e` almost always appears together, but the model must predict each character separately
+- **시퀀스가 BPE보다 약 3배 깁니다** — 샘플 하나당 계산량이 늘어납니다
+- **모델이 철자를 처음부터 배워야 합니다** — "단어"라는 개념이 없습니다
+- **예측 가능한 패턴에 용량을 씁니다** — `t-h-e`는 거의 항상 함께 나오지만, 모델은 각 문자를 따로 예측해야 합니다
 
-For large datasets (TinyStories, OpenWebText), you'd switch to **Byte-Pair Encoding (BPE)** which groups common character sequences into single tokens. GPT-2 uses a BPE tokenizer with 50,257 tokens. You can use it via `tiktoken`:
+큰 데이터셋(TinyStories, OpenWebText)에서는 흔한 문자 시퀀스를 하나의 토큰으로 묶는 **Byte-Pair Encoding(BPE)** 으로 바꾸는 것이 좋습니다. GPT-2는 50,257개 토큰을 가진 BPE 토크나이저를 사용합니다. `tiktoken`으로 사용할 수 있습니다.
 
 ```python
 import tiktoken
@@ -59,22 +59,22 @@ tokens = enc.encode("Hello, world!")  # [15496, 11, 995, 0]
 text = enc.decode(tokens)             # "Hello, world!"
 ```
 
-But for this workshop on Shakespeare, character-level is the right choice.
+하지만 Shakespeare를 다루는 이 워크숍에서는 문자 단위가 올바른 선택입니다.
 
-## How It Connects to the Model
+## 모델과 어떻게 연결되는가
 
-The vocabulary size directly determines two things in the model architecture:
+어휘 크기는 모델 아키텍처의 두 가지를 직접 결정합니다.
 
-1. **The embedding table** — `nn.Embedding(vocab_size, n_embd)` maps each token ID to a learned vector. With vocab_size=65, this is tiny (65 × 384 = 24,960 parameters). With GPT-2's vocab of 50,257, it's 50,257 × 384 = 19.3M parameters — nearly half the model.
+1. **임베딩 테이블** — `nn.Embedding(vocab_size, n_embd)`는 각 토큰 ID를 학습되는 벡터로 매핑합니다. vocab_size=65라면 아주 작습니다(65 × 384 = 24,960개 파라미터). GPT-2의 50,257개 어휘를 쓰면 50,257 × 384 = 19.3M 파라미터입니다. 모델의 거의 절반에 해당합니다.
 
-2. **The output layer** — `nn.Linear(n_embd, vocab_size)` produces a probability over all possible next tokens. With 65 tokens, the model chooses from 65 options. With 50,257 tokens, it must spread its predictions across 50,257 classes.
+2. **출력층** — `nn.Linear(n_embd, vocab_size)`는 가능한 모든 다음 토큰에 대한 확률을 만듭니다. 토큰이 65개라면 모델은 65개 선택지 중에서 고릅니다. 토큰이 50,257개라면 예측을 50,257개 클래스에 나누어야 합니다.
 
-## Key Takeaways
+## 핵심 정리
 
-- Tokenization converts text ↔ integer sequences
-- We use character-level: each unique character gets an ID (`stoi`/`itos` mappings)
-- Vocabulary size must match the dataset — 50k vocab on a tiny dataset means most token patterns are too sparse to learn
-- Character-level works for small experiments; BPE is needed for large datasets
-- The vocab size directly affects model size (embedding table) and training difficulty (output distribution)
+- 토큰화는 텍스트 ↔ 정수 시퀀스 변환입니다
+- 여기서는 문자 단위를 사용합니다. 고유 문자마다 ID가 있으며 `stoi`/`itos` 매핑을 만듭니다
+- 어휘 크기는 데이터셋에 맞아야 합니다. 작은 데이터셋에 5만 어휘를 쓰면 대부분의 토큰 패턴이 너무 희소해서 배우기 어렵습니다
+- 문자 단위는 작은 실험에 좋고, 큰 데이터셋에는 BPE가 필요합니다
+- 어휘 크기는 모델 크기(임베딩 테이블)와 학습 난이도(출력 분포)에 직접 영향을 줍니다
 
-## Next: [Part 2 — The Transformer →](02-the-transformer.md)
+## 다음: [파트 2 — 트랜스포머 →](02-the-transformer.md)

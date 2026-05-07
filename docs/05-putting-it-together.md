@@ -1,31 +1,31 @@
-# Part 5: Putting It All Together
+# 파트 5: 모두 연결하기
 
-Time to wire everything up, train on real data, and prepare for the competition.
+이제 모든 조각을 연결하고, 실제 데이터로 학습하고, 대회를 준비할 시간입니다.
 
-## Project Structure
+## 프로젝트 구조
 
-By now you should have:
+지금쯤이면 다음 파일이 있어야 합니다.
 
 ```
 scratchpad/
-├── model.py           # GPT architecture (Part 2)
-├── train.py           # Tokenization + data loading + training loop (Parts 1 & 3)
-└── generate.py        # Text generation (Part 4)
+├── model.py           # GPT 아키텍처(파트 2)
+├── train.py           # 토큰화 + 데이터 로딩 + 학습 루프(파트 1 & 3)
+└── generate.py        # 텍스트 생성(파트 4)
 ```
 
-The Shakespeare dataset is included in the repo at `data/shakespeare.txt` — no download needed.
+Shakespeare 데이터셋은 저장소의 `data/shakespeare.txt`에 포함되어 있습니다. 따로 다운로드할 필요가 없습니다.
 
 ### Google Colab
 
-If you're using Colab instead of a local setup:
+로컬 환경 대신 Colab을 사용한다면 다음 순서로 진행합니다.
 
-1. Open a new notebook at [colab.research.google.com](https://colab.research.google.com/)
-2. Go to **Runtime → Change runtime type → GPU (T4)**
-3. Install dependencies in the first cell:
+1. [colab.research.google.com](https://colab.research.google.com/)에서 새 노트북을 엽니다
+2. **Runtime → Change runtime type → GPU (T4)** 로 이동합니다
+3. 첫 번째 셀에서 의존성을 설치합니다.
    ```python
    !pip install -q torch numpy tqdm tiktoken
    ```
-4. Download Shakespeare:
+4. Shakespeare를 다운로드합니다.
    ```python
    import urllib.request, os
    os.makedirs("data", exist_ok=True)
@@ -34,70 +34,70 @@ If you're using Colab instead of a local setup:
        "data/shakespeare.txt"
    )
    ```
-5. Write your model, training loop, and generate code in notebook cells (paste from the docs or write it yourself)
-6. Use `"data/shakespeare.txt"` as the data path (not `"../data/shakespeare.txt"`)
+5. 노트북 셀에 모델, 학습 루프, 생성 코드를 작성합니다(문서에서 붙여넣거나 직접 작성)
+6. 데이터 경로는 `"../data/shakespeare.txt"`가 아니라 `"data/shakespeare.txt"`를 사용합니다
 
-A ready-to-run notebook is also included at `colab.ipynb` in the repo.
+바로 실행할 수 있는 노트북도 저장소의 `colab.ipynb`에 포함되어 있습니다.
 
-## Step 1: Train
+## 단계 1: 학습
 
 ```bash
 cd scratchpad
 python train.py
 ```
 
-The default config trains a 6L/6H/384D model (~10M params) on Shakespeare for 5000 steps with batch_size=64. On an M3 Pro this takes ~45 minutes. You'll see:
+기본 설정은 Shakespeare에서 6L/6H/384D 모델(약 1000만 파라미터)을 batch_size=64로 5000 step 학습합니다. M3 Pro에서는 약 45분이 걸립니다. 실행 중 다음을 보게 됩니다.
 
-- Val loss + generated samples every 100 steps
-- Checkpoints every 1000 steps
-- Final checkpoint + loss log at the end
+- 100 step마다 val loss와 생성 샘플
+- 1000 step마다 체크포인트
+- 마지막에 최종 체크포인트와 손실 로그
 
-## Step 2: Generate
+## 단계 2: 생성
 
 ```bash
 python generate.py checkpoint_final.pt
 ```
 
-This loads a checkpoint and generates text from three prompts. You can pass any checkpoint file as an argument.
+체크포인트를 불러와 세 가지 프롬프트에서 텍스트를 생성합니다. 어떤 체크포인트 파일이든 인자로 넘길 수 있습니다.
 
-## Step 3: Experiment
+## 단계 3: 실험
 
-Once the basic pipeline works, try these to build intuition before the competition:
+기본 파이프라인이 동작하면 대회 전에 직관을 쌓기 위해 다음을 실험해 보세요.
 
-### Model Size vs. Quality
+### 모델 크기 vs 품질
 
-Train three models on the same data and compare output quality:
+같은 데이터로 세 모델을 학습하고 출력 품질을 비교합니다.
 
-| Config | Params | n_layer | n_head | n_embd | Expected Loss |
-|--------|--------|---------|--------|--------|---------------|
+| 설정 | 파라미터 | n_layer | n_head | n_embd | 예상 손실 |
+|------|----------|---------|--------|--------|-----------|
 | Tiny | ~0.5M | 2 | 2 | 128 | ~2.0 |
 | Small | ~4M | 4 | 4 | 256 | ~1.5 |
 | Medium | ~10M | 6 | 6 | 384 | ~1.2 |
 
-Modify the `train()` call in `train.py`:
+`train.py`의 `train()` 호출을 수정합니다.
 
 ```python
-# tiny — fast, good for testing ideas
+# tiny — 빠름, 아이디어 테스트에 좋음
 model, stoi, itos = train(data_path, n_layer=2, n_head=2, n_embd=128)
 
-# medium — default, good baseline
+# medium — 기본값, 좋은 기준선
 model, stoi, itos = train(data_path, n_layer=6, n_head=6, n_embd=384)
 
-# large — needs more data to justify
+# large — 정당화하려면 더 많은 데이터가 필요함
 model, stoi, itos = train(data_path, n_layer=12, n_head=12, n_embd=768)
 ```
 
-### Context Length
+### 컨텍스트 길이
 
-Train with `block_size=128` vs `block_size=512`. Longer context lets the model capture full stanzas and rhyme schemes, but uses more memory (reduce batch_size to compensate).
+`block_size=128`과 `block_size=512`로 학습해 보세요. 긴 컨텍스트는 모델이 전체 연과 압운 구조를 잡게 해주지만 메모리를 더 많이 씁니다. 필요하면 batch_size를 줄이세요.
 
-### Learning Rate
+### 학습률
 
-Try `3e-4` (conservative), `1e-3` (default), `3e-3` (aggressive). The right LR depends on your model size and data.
+`3e-4`(보수적), `1e-3`(기본값), `3e-3`(공격적)을 시도해 보세요. 알맞은 학습률은 모델 크기와 데이터에 따라 달라집니다.
 
-## Monitoring Training
+## 학습 모니터링
 
-The training loop saves `loss_log.json`. You can plot it with any tool:
+학습 루프는 `loss_log.json`을 저장합니다. 어떤 도구로든 그릴 수 있습니다.
 
 ```python
 # pip install matplotlib
@@ -115,27 +115,27 @@ plt.savefig("loss_curve.png")
 plt.show()
 ```
 
-### What to Look For
+### 무엇을 봐야 하나
 
-- **Train loss not decreasing**: Learning rate too low, or a bug
-- **Train loss decreasing, val loss increasing**: Overfitting — more data or smaller model
-- **Loss spikes**: Reduce learning rate or check gradient clipping
-- **Loss plateaus**: Model has learned what it can. More data or bigger model
+- **학습 손실이 내려가지 않음**: 학습률이 너무 낮거나 버그가 있음
+- **학습 손실은 내려가는데 검증 손실이 올라감**: 과적합, 더 많은 데이터나 더 작은 모델 필요
+- **Loss spike**: 학습률을 낮추거나 그래디언트 클리핑을 확인
+- **Loss plateau**: 모델이 배울 수 있는 만큼 배움. 더 많은 데이터나 더 큰 모델 필요
 
-## Now: The Competition
+## 이제: 대회
 
-You've trained a model, you've seen it overfit, you've experimented with configs. Now apply everything you've learned.
+모델을 학습했고, 과적합을 봤고, 설정 실험도 해봤습니다. 이제 배운 것을 적용할 차례입니다.
 
-### [Part 6 — Competition: Best AI Poet →](06-competition.md)
+### [파트 6 — 대회: 최고의 AI 시인 →](06-competition.md)
 
-The goal: find a good poetry dataset, train the best model you can, and submit the best poem your model generates. You can change anything — the data, the model size, the tokenizer, the training strategy. The only rules: you train it from scratch on your laptop, and the poem comes from the model.
+목표는 좋은 시 데이터셋을 찾고, 가능한 최고의 모델을 학습하고, 모델이 생성한 최고의 시를 제출하는 것입니다. 데이터, 모델 크기, 토크나이저, 학습 전략 등 무엇이든 바꿀 수 있습니다. 규칙은 두 가지뿐입니다. 노트북에서 처음부터 학습해야 하며, 시는 모델에서 나온 것이어야 합니다.
 
-## Further Reading
+## 더 읽을거리
 
-- [Karpathy's microgpt](http://karpathy.github.io/2026/02/12/microgpt/) — A full GPT in 200 lines of pure Python
-- [build-nanogpt video lecture](https://github.com/karpathy/build-nanogpt) — 4-hour video building GPT-2 from an empty file
-- [nanochat](https://github.com/karpathy/nanochat) — Full ChatGPT clone training pipeline
-- [Attention Is All You Need (2017)](https://arxiv.org/abs/1706.03762) — The original transformer paper
-- [GPT-2 paper (2019)](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf) — Language models as unsupervised learners
-- [TinyStories paper](https://arxiv.org/abs/2305.07759) — Small models trained on curated data
-- [Chinchilla (2022)](https://arxiv.org/abs/2203.15556) — Optimal scaling of data vs. parameters
+- [Karpathy의 microgpt](http://karpathy.github.io/2026/02/12/microgpt/) — 순수 Python 200줄로 구현한 전체 GPT
+- [build-nanogpt 영상 강의](https://github.com/karpathy/build-nanogpt) — 빈 파일에서 GPT-2를 만드는 4시간짜리 영상
+- [nanochat](https://github.com/karpathy/nanochat) — 전체 ChatGPT 클론 학습 파이프라인
+- [Attention Is All You Need (2017)](https://arxiv.org/abs/1706.03762) — 원래의 트랜스포머 논문
+- [GPT-2 논문(2019)](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf) — 비지도 학습자로서의 언어 모델
+- [TinyStories 논문](https://arxiv.org/abs/2305.07759) — 선별된 데이터로 학습한 작은 모델
+- [Chinchilla (2022)](https://arxiv.org/abs/2203.15556) — 데이터와 파라미터의 최적 스케일링

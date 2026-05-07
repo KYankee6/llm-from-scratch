@@ -1,7 +1,7 @@
 [project]
 name = "llm-training-workshop"
 version = "0.1.0"
-description = "Train a GPT from scratch on a MacBook"
+description = "MacBook에서 GPT를 처음부터 학습하기"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

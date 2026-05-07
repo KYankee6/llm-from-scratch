@@ -1,38 +1,39 @@
-# Part 2: The Transformer
+# 파트 2: 트랜스포머
 
-This is the core of the workshop. You'll write the full GPT model architecture from scratch in PyTorch.
+이 파트가 워크숍의 핵심입니다. PyTorch로 전체 GPT 모델 아키텍처를 처음부터 작성합니다.
 
-## The Big Picture
+## 큰 그림
 
-A GPT is an **autoregressive language model**: given a sequence of tokens, it predicts the next one. Stack this prediction in a loop and you get text generation.
+GPT는 **자기회귀 언어 모델**입니다. 토큰 시퀀스가 주어지면 다음 토큰을 예측합니다. 이 예측을 루프로 쌓으면 텍스트 생성이 됩니다.
 
-The architecture is a stack of identical **transformer blocks**, each containing:
-1. **Multi-head self-attention** — lets each token look at all previous tokens
-2. **Feed-forward network (MLP)** — processes each position independently
-3. **Residual connections** — add the input back to the output of each sub-layer
-4. **Layer normalization** — stabilizes training
+아키텍처는 동일한 **트랜스포머 블록**을 여러 층 쌓은 구조입니다. 각 블록에는 다음 요소가 들어갑니다.
 
-## Write It: `model.py`
+1. **멀티헤드 셀프 어텐션** — 각 토큰이 이전 토큰 전체를 볼 수 있게 합니다
+2. **피드포워드 네트워크(MLP)** — 각 위치를 독립적으로 처리합니다
+3. **잔차 연결** — 각 하위 층의 출력에 입력을 다시 더합니다
+4. **레이어 정규화** — 학습을 안정화합니다
 
-Create a new file called `model.py` in your scratchpad. You'll add each class one at a time as you read through this section. By the end, the file will contain `GPTConfig`, `CausalSelfAttention`, `MLP`, `Block`, and `GPT`.
+## 작성하기: `model.py`
 
-### Configuration
+scratchpad 안에 `model.py`라는 새 파일을 만듭니다. 이 섹션을 읽으며 클래스를 하나씩 추가하세요. 끝까지 작성하면 파일에는 `GPTConfig`, `CausalSelfAttention`, `MLP`, `Block`, `GPT`가 들어갑니다.
+
+### 설정
 
 ```python
 from dataclasses import dataclass
 
 @dataclass
 class GPTConfig:
-    vocab_size: int = 65       # character-level: 65 unique chars in Shakespeare
-    block_size: int = 256      # max sequence length (context window)
-    n_layer: int = 6           # number of transformer blocks
-    n_head: int = 6            # number of attention heads
-    n_embd: int = 384          # embedding dimension
+    vocab_size: int = 65       # 문자 단위: Shakespeare의 고유 문자 65개
+    block_size: int = 256      # 최대 시퀀스 길이(컨텍스트 창)
+    n_layer: int = 6           # 트랜스포머 블록 수
+    n_head: int = 6            # 어텐션 헤드 수
+    n_embd: int = 384          # 임베딩 차원
 ```
 
-`vocab_size` comes from the tokenizer (65 characters for Shakespeare). `block_size` is the maximum number of tokens the model can see at once. `n_embd` is the width of the model — every hidden state is a vector of this size.
+`vocab_size`는 토크나이저에서 옵니다(Shakespeare의 경우 문자 65개). `block_size`는 모델이 한 번에 볼 수 있는 최대 토큰 수입니다. `n_embd`는 모델의 폭입니다. 모든 은닉 상태는 이 크기의 벡터입니다.
 
-### Embeddings
+### 임베딩
 
 ```python
 import torch
@@ -43,23 +44,24 @@ class GPT(nn.Module):
         super().__init__()
         self.config = config
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),   # token embeddings
-            wpe = nn.Embedding(config.block_size, config.n_embd),   # position embeddings
+            wte = nn.Embedding(config.vocab_size, config.n_embd),   # 토큰 임베딩
+            wpe = nn.Embedding(config.block_size, config.n_embd),   # 위치 임베딩
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        # weight tying: the output projection shares weights with the token embeddings
+        # weight tying: 출력 투영이 토큰 임베딩과 가중치를 공유합니다
         self.transformer.wte.weight = self.lm_head.weight
 ```
 
-Two embedding tables:
-- **`wte`** (word token embedding): maps each token ID to a learned vector. Size: `[65, 384]`
-- **`wpe`** (word position embedding): maps each position (0 to 255) to a learned vector. Size: `[256, 384]`
+두 개의 임베딩 테이블이 있습니다.
 
-**Weight tying**: the same matrix that maps tokens → embeddings is reused (transposed) to map embeddings → logits at the output. This reduces parameters and improves training — the model's input and output representations of tokens are forced to be consistent. With our small vocab of 65 this saves very little, but it's standard practice and matters a lot with large vocabularies.
+- **`wte`**(word token embedding): 각 토큰 ID를 학습되는 벡터로 매핑합니다. 크기: `[65, 384]`
+- **`wpe`**(word position embedding): 각 위치(0부터 255)를 학습되는 벡터로 매핑합니다. 크기: `[256, 384]`
 
-### Forward Pass
+**Weight tying**: 토큰 → 임베딩으로 매핑하는 같은 행렬을 출력에서 임베딩 → logits로 매핑할 때도 재사용합니다(전치된 형태). 이렇게 하면 파라미터가 줄고 학습이 좋아집니다. 토큰의 입력 표현과 출력 표현이 일관되도록 강제되기 때문입니다. 여기서는 어휘가 65개라 절약량이 작지만, 큰 어휘에서는 중요하며 표준적인 방식입니다.
+
+### 순전파
 
 ```python
     def forward(self, idx, targets=None):
@@ -68,7 +70,7 @@ Two embedding tables:
 
         tok_emb = self.transformer.wte(idx)    # (B, T, n_embd)
         pos_emb = self.transformer.wpe(pos)    # (T, n_embd)
-        x = tok_emb + pos_emb                  # (B, T, n_embd) — broadcasting adds position info
+        x = tok_emb + pos_emb                  # (B, T, n_embd) — 브로드캐스팅으로 위치 정보가 더해집니다
 
         for block in self.transformer.h:
             x = block(x)
@@ -86,7 +88,7 @@ Two embedding tables:
 ```
 
 ```
-token IDs (B, T)
+토큰 ID (B, T)
     │
     ▼
 ┌─────────┐     ┌─────────┐
@@ -112,19 +114,19 @@ token IDs (B, T)
                           logits (B, T, 65)
 ```
 
-The position embedding is added to the token embedding — this is how the model knows word order. Without it, "the dog bit the man" and "the man bit the dog" would look identical.
+위치 임베딩은 토큰 임베딩에 더해집니다. 이것이 모델이 단어 순서를 알게 되는 방식입니다. 위치 정보가 없다면 "the dog bit the man"과 "the man bit the dog"는 똑같아 보입니다.
 
-### Self-Attention
+### 셀프 어텐션
 
-This is the mechanism that lets each token attend to (look at) every previous token in the sequence.
+셀프 어텐션은 각 토큰이 시퀀스 안의 모든 이전 토큰에 주의를 기울일 수 있게 하는 메커니즘입니다.
 
 ```python
 class CausalSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)  # Q, K, V projections
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd)       # output projection
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)  # Q, K, V 투영
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd)       # 출력 투영
         self.n_head = config.n_head
         self.n_embd = config.n_embd
 
@@ -133,13 +135,13 @@ class CausalSelfAttention(nn.Module):
         qkv = self.c_attn(x)
         q, k, v = qkv.split(self.n_embd, dim=2)
 
-        # reshape for multi-head: (B, T, C) → (B, n_head, T, head_dim)
+        # 멀티헤드용 reshape: (B, T, C) → (B, n_head, T, head_dim)
         head_dim = C // self.n_head
         q = q.view(B, T, self.n_head, head_dim).transpose(1, 2)
         k = k.view(B, T, self.n_head, head_dim).transpose(1, 2)
         v = v.view(B, T, self.n_head, head_dim).transpose(1, 2)
 
-        # attention with causal mask (each token can only attend to previous tokens)
+        # causal mask가 적용된 attention(각 토큰은 이전 토큰만 볼 수 있음)
         y = torch.nn.functional.scaled_dot_product_attention(
             q, k, v, is_causal=True
         )
@@ -153,47 +155,47 @@ x (B, T, 384)
     │
     ▼
 ┌─────────┐
-│  c_attn │  one Linear → split into Q, K, V
+│  c_attn │  하나의 Linear → Q, K, V로 나눔
 └─────────┘
     │
     ▼
 ┌─────────────────────────────┐
-│  split into 6 heads         │  each head: (B, T, 64)
+│  6개 헤드로 분리            │  각 헤드: (B, T, 64)
 │                             │
-│  Q @ K^T / sqrt(64)         │  similarity scores
-│  mask future positions      │  causal: can only look back
-│  softmax → weights          │
-│  weights @ V                │  weighted combination
+│  Q @ K^T / sqrt(64)         │  유사도 점수
+│  미래 위치 마스킹           │  causal: 뒤가 아니라 앞만 봄
+│  softmax → 가중치           │
+│  weights @ V                │  가중합
 │                             │
 │  head1  head2  ...  head6   │
 └─────────────────────────────┘
     │
-    ▼  concatenate all heads
+    ▼  모든 헤드 연결
 ┌─────────┐
-│  c_proj │  project back to 384 dims
+│  c_proj │  다시 384차원으로 투영
 └─────────┘
     │
     ▼
-output (B, T, 384)
+출력 (B, T, 384)
 ```
 
-Breaking this down:
+쪼개서 보면 다음과 같습니다.
 
-1. **Q, K, V projections**: A single linear layer projects the input into three matrices — Query, Key, and Value. Each is `(B, T, n_embd)`.
+1. **Q, K, V 투영**: 하나의 선형층이 입력을 Query, Key, Value 세 행렬로 투영합니다. 각각의 크기는 `(B, T, n_embd)`입니다.
 
-2. **Multi-head reshape**: We split the embedding dimension into `n_head` separate heads, each with `head_dim = n_embd / n_head = 64` dimensions. This lets the model attend to different aspects of the input in parallel.
+2. **멀티헤드 reshape**: 임베딩 차원을 `n_head`개의 별도 헤드로 나눕니다. 각 헤드는 `head_dim = n_embd / n_head = 64`차원입니다. 이렇게 하면 모델이 입력의 여러 측면을 병렬로 주시할 수 있습니다.
 
-3. **Scaled dot-product attention**: For each query position, compute a similarity score against all key positions, mask out future positions (causal), apply softmax, and use the result to weight the values. The math: `softmax(QK^T / sqrt(head_dim)) @ V`
+3. **Scaled dot-product attention**: 각 query 위치에 대해 모든 key 위치와의 유사도 점수를 계산하고, 미래 위치를 마스킹(causal)한 뒤 softmax를 적용하고, 그 결과로 value에 가중치를 줍니다. 수식은 `softmax(QK^T / sqrt(head_dim)) @ V`입니다.
 
-4. **Causal masking** (`is_causal=True`): Position `i` can only attend to positions `0..i`. This prevents the model from "cheating" by looking at future tokens during training. This is what makes GPT **autoregressive**.
+4. **Causal masking**(`is_causal=True`): 위치 `i`는 위치 `0..i`까지만 볼 수 있습니다. 학습 중 미래 토큰을 보고 "부정행위"하는 것을 막습니다. 이것이 GPT를 **자기회귀** 모델로 만드는 핵심입니다.
 
-5. **Output projection**: Concatenate all heads and project back to `n_embd` dimensions.
+5. **출력 투영**: 모든 헤드를 연결한 뒤 다시 `n_embd` 차원으로 투영합니다.
 
-### Why Multi-Head?
+### 왜 멀티헤드인가?
 
-With 6 heads of 64 dimensions each (instead of one head of 384 dimensions), the model can simultaneously track different relationships: one head might track which vowels follow consonants, another might track line-break patterns, another might focus on recent context.
+384차원짜리 헤드 하나 대신 64차원 헤드 6개를 쓰면 모델이 서로 다른 관계를 동시에 추적할 수 있습니다. 어떤 헤드는 자음 뒤에 어떤 모음이 오는지 볼 수 있고, 다른 헤드는 줄바꿈 패턴을 볼 수 있으며, 또 다른 헤드는 최근 문맥에 집중할 수 있습니다.
 
-### MLP Block
+### MLP 블록
 
 ```python
 class MLP(nn.Module):
@@ -204,9 +206,9 @@ class MLP(nn.Module):
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd)
 
     def forward(self, x):
-        x = self.c_fc(x)       # project up: 384 → 1536
-        x = self.gelu(x)       # non-linearity
-        return self.c_proj(x)  # project back down: 1536 → 384
+        x = self.c_fc(x)       # 위로 투영: 384 → 1536
+        x = self.gelu(x)       # 비선형성
+        return self.c_proj(x)  # 다시 아래로 투영: 1536 → 384
 ```
 
 ```
@@ -214,28 +216,28 @@ x (B, T, 384)
     │
     ▼
 ┌─────────┐
-│  c_fc   │  Linear: 384 → 1536 (expand 4x)
+│  c_fc   │  Linear: 384 → 1536 (4배 확장)
 └─────────┘
     │
     ▼
 ┌─────────┐
-│  GELU   │  non-linearity
+│  GELU   │  비선형성
 └─────────┘
     │
     ▼
 ┌─────────┐
-│  c_proj │  Linear: 1536 → 384 (project back)
+│  c_proj │  Linear: 1536 → 384 (다시 투영)
 └─────────┘
     │
     ▼
-output (B, T, 384)
+출력 (B, T, 384)
 ```
 
-The MLP is applied independently to each position. It expands the representation to 4x the embedding dimension, applies a non-linearity (GELU), and projects back down. This is where the model does most of its "thinking" — the attention gathers information, the MLP processes it.
+MLP는 각 위치에 독립적으로 적용됩니다. 표현을 임베딩 차원의 4배로 확장하고, 비선형성(GELU)을 적용한 뒤 다시 줄입니다. 모델이 대부분의 "사고"를 하는 곳이 여기입니다. 어텐션이 정보를 모으면 MLP가 그 정보를 처리합니다.
 
-**Why GELU instead of ReLU?** GELU (Gaussian Error Linear Unit) is smoother than ReLU. It doesn't have a hard cutoff at zero, which helps gradient flow. GPT-2 uses the `tanh` approximation for speed.
+**왜 ReLU 대신 GELU인가요?** GELU(Gaussian Error Linear Unit)는 ReLU보다 부드럽습니다. 0에서 딱 잘리는 경계가 없어서 그래디언트 흐름에 도움이 됩니다. GPT-2는 속도를 위해 `tanh` 근사를 사용합니다.
 
-### Transformer Block
+### 트랜스포머 블록
 
 ```python
 class Block(nn.Module):
@@ -247,8 +249,8 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))   # attention with residual connection
-        x = x + self.mlp(self.ln_2(x))    # MLP with residual connection
+        x = x + self.attn(self.ln_1(x))   # 잔차 연결이 있는 attention
+        x = x + self.mlp(self.ln_2(x))    # 잔차 연결이 있는 MLP
         return x
 ```
 
@@ -267,7 +269,7 @@ x (B, T, 384)
 └──────────┘            │
     │                   │
     ▼                   │
-  + ◄───────────────────┘  residual connection
+  + ◄───────────────────┘  잔차 연결
     │
     ├───────────────────┐
     ▼                   │
@@ -281,19 +283,19 @@ x (B, T, 384)
 └──────────┘            │
     │                   │
     ▼                   │
-  + ◄───────────────────┘  residual connection
+  + ◄───────────────────┘  잔차 연결
     │
     ▼
-output (B, T, 384)
+출력 (B, T, 384)
 ```
 
-Two key design choices:
+두 가지 중요한 설계 선택이 있습니다.
 
-1. **Pre-norm** (LayerNorm before attention/MLP, not after): This stabilizes training by normalizing inputs to each sub-layer. The original transformer paper used post-norm, but pre-norm is now standard.
+1. **Pre-norm**(attention/MLP 뒤가 아니라 앞에 LayerNorm): 각 하위 층에 들어가는 입력을 정규화해 학습을 안정화합니다. 원래 트랜스포머 논문은 post-norm을 썼지만, 지금은 pre-norm이 표준입니다.
 
-2. **Residual connections** (`x = x + sublayer(x)`): The input is added back to the output. This lets gradients flow directly through the network during backpropagation, making deep networks trainable. Without residuals, a 6-layer network would be much harder to train.
+2. **잔차 연결**(`x = x + sublayer(x)`): 입력을 출력에 다시 더합니다. 이렇게 하면 역전파 중 그래디언트가 네트워크를 직접 통과할 수 있어 깊은 네트워크도 학습 가능합니다. 잔차가 없다면 6층 네트워크도 훨씬 학습하기 어렵습니다.
 
-### Parameter Count
+### 파라미터 수
 
 ```python
 config = GPTConfig()
@@ -302,22 +304,23 @@ n_params = sum(p.numel() for p in model.parameters())
 print(f"Parameters: {n_params / 1e6:.1f}M")  # ~10.8M
 ```
 
-Where do the parameters live?
-- Token embeddings: `65 × 384 = 25K` (tiny with char-level vocab — shared with lm_head)
-- Position embeddings: `256 × 384 = 98K`
-- Per transformer block: `~1.8M` (attention: 4 × 384² = 590K, MLP: 2 × 384 × 1536 = 1.2M, norms: negligible)
-- 6 blocks: `~10.6M`
-- Total: `~10.8M`
+파라미터는 어디에 있을까요?
 
-Notice how almost all the parameters are in the transformer blocks, not the embeddings. With GPT-2's 50k vocab, the embedding table would be 50,257 × 384 = 19.3M — nearly double the entire model. This is why vocab size matters.
+- 토큰 임베딩: `65 × 384 = 25K`(문자 단위 어휘라 작음, lm_head와 공유)
+- 위치 임베딩: `256 × 384 = 98K`
+- 트랜스포머 블록 하나당: `~1.8M`(attention: 4 × 384² = 590K, MLP: 2 × 384 × 1536 = 1.2M, norm은 무시해도 될 정도)
+- 6개 블록: `~10.6M`
+- 전체: `~10.8M`
 
-## Key Takeaways
+거의 모든 파라미터가 임베딩이 아니라 트랜스포머 블록 안에 있다는 점에 주목하세요. GPT-2의 5만 어휘를 쓰면 임베딩 테이블만 50,257 × 384 = 19.3M입니다. 이 모델 전체의 거의 두 배입니다. 그래서 어휘 크기가 중요합니다.
 
-- A GPT is a stack of identical transformer blocks
-- Each block: LayerNorm → Self-Attention → Residual → LayerNorm → MLP → Residual
-- Self-attention lets tokens look at all previous tokens (causal masking prevents looking ahead)
-- Multi-head attention runs multiple attention patterns in parallel
-- Residual connections and layer norm make deep networks trainable
-- Weight tying between input embeddings and output projection reduces parameters
+## 핵심 정리
 
-## Next: [Part 3 — The Training Loop →](03-training-loop.md)
+- GPT는 동일한 트랜스포머 블록을 쌓은 구조입니다
+- 각 블록: LayerNorm → Self-Attention → Residual → LayerNorm → MLP → Residual
+- 셀프 어텐션은 토큰이 모든 이전 토큰을 볼 수 있게 합니다(causal masking은 미래를 보는 것을 막습니다)
+- 멀티헤드 어텐션은 여러 어텐션 패턴을 병렬로 실행합니다
+- 잔차 연결과 레이어 정규화는 깊은 네트워크를 학습 가능하게 만듭니다
+- 입력 임베딩과 출력 투영 사이의 weight tying은 파라미터를 줄입니다
+
+## 다음: [파트 3 — 학습 루프 →](03-training-loop.md)
